@@ -24,7 +24,7 @@ const Signup = () => {
 
     try {
       await axios.post(
-        "http://localhost:8000/api/register",
+        "https://code-gpt-server.onrender.com/api/register",
         {
           name,
           gender,

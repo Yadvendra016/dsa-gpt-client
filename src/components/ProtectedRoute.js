@@ -8,7 +8,7 @@ const ProtectedRoute = ({ component: Component, ...rest }) => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        await axios.get("http://localhost:8000/api/me", {
+        await axios.get("https://code-gpt-server.onrender.com/api/me", {
           withCredentials: true,
         });
         setIsAuthenticated(true);

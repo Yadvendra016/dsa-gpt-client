@@ -20,9 +20,12 @@ const Home = () => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const response = await axios.get("http://localhost:8000/api/me", {
-          withCredentials: true,
-        });
+        const response = await axios.get(
+          "https://code-gpt-server.onrender.com/api/me",
+          {
+            withCredentials: true,
+          }
+        );
         if (response.data) {
           setIsLoggedIn(true);
           setUser(response.data);
@@ -41,7 +44,7 @@ const Home = () => {
   const handleLogout = async () => {
     try {
       await axios.post(
-        "http://localhost:8000/api/logout",
+        "https://code-gpt-server.onrender.com/api/logout",
         {},
         {
           withCredentials: true,

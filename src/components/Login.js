@@ -26,7 +26,7 @@ const Login = () => {
 
     try {
       await axios.post(
-        "http://localhost:8000/api/login",
+        "https://code-gpt-server.onrender.com/api/login",
         { email, password },
         { withCredentials: true }
       );
