@@ -10,6 +10,10 @@ const ProtectedRoute = ({ component: Component, ...rest }) => {
       try {
         await axios.get("https://code-gpt-server.onrender.com/api/me", {
           withCredentials: true,
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
         });
         setIsAuthenticated(true);
       } catch (error) {

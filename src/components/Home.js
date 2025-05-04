@@ -24,6 +24,10 @@ const Home = () => {
           "https://code-gpt-server.onrender.com/api/me",
           {
             withCredentials: true,
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+            },
           }
         );
         if (response.data) {
@@ -48,6 +52,10 @@ const Home = () => {
         {},
         {
           withCredentials: true,
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
         }
       );
       setIsLoggedIn(false);
