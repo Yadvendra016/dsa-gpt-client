@@ -3,6 +3,7 @@ import SpeechRecognition, {
   useSpeechRecognition,
 } from "react-speech-recognition";
 import { FaMicrophone, FaPaperPlane, FaLightbulb } from "react-icons/fa";
+import { FiEdit2, FiTrash2 } from "react-icons/fi";
 import { motion, AnimatePresence } from "framer-motion";
 import { ReactTyped } from "react-typed";
 import axios from "axios";
@@ -156,6 +157,9 @@ const Chat = () => {
   const [user, setUser] = useState(null);
   const [isTyping, setIsTyping] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editText, setEditText] = useState("");
+
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const chatContainerRef = useRef(null);
@@ -198,8 +202,18 @@ const Chat = () => {
 
           // Transform the database chats to alternating user-bot messages
           const chatHistory = response.data.flatMap((chat) => [
-            { text: chat.userMessage, sender: "user" },
-            { text: chat.botMessage, sender: "bot" },
+            {
+              text: chat.userMessage,
+              sender: "user",
+              chatId: chat._id,
+              conversationId: chat.conversationId,
+            },
+            {
+              text: chat.botMessage,
+              sender: "bot",
+              chatId: chat._id,
+              conversationId: chat.conversationId,
+            },
           ]);
 
           setMessages(chatHistory);
@@ -224,44 +238,100 @@ const Chat = () => {
 
   const sendMessage = async () => {
     if (input.trim()) {
-      const newMessage = { text: input, sender: "user" };
-      setMessages((prev) => [...prev, newMessage]);
+      // If we're editing, use the existing conversationId
+      const conversationId =
+        editingId !== null
+          ? messages[editingId].conversationId
+          : Date.now().toString();
+
+      // Use editText if we're editing, otherwise use input
+      const messageToSend = editingId !== null ? editText : input;
+
+      const newMessage = {
+        text: messageToSend,
+        sender: "user",
+        conversationId,
+        isLocal: true,
+      };
+      console.log(newMessage);
+
+      // If editing, replace the message and remove all subsequent messages from UI
+      if (editingId !== null) {
+        // Keep messages only up to the edited message and replace it
+        setMessages((prev) => {
+          const updated = prev.slice(0, editingId);
+          updated.push(newMessage);
+          return updated;
+        });
+      } else {
+        setMessages((prev) => [...prev, newMessage]);
+      }
+
       setInput("");
       resetTranscript();
       setIsTyping(true);
 
       try {
-        // Send the user message to the Flask server
         const response = await axios.post("http://34.56.215.239:8000/chat", {
-          message: input,
+          message: messageToSend, // Use messageToSend here instead of input
+          conversationId, // Send conversationId to maintain context
         });
 
-        console.log("The response is: ", response);
-
-        // Simulate a slight delay to show typing indicator
-        setTimeout(() => {
-          const botMessage = { text: response.data.response, sender: "bot" };
-          setMessages((prevMessages) => [...prevMessages, botMessage]);
-          setIsTyping(false);
-
-          // Save the chat to the database
-          axios
-            .post(
-              "http://localhost:8000/api/chat",
+        // If we were editing, also update the database
+        if (editingId !== null) {
+          try {
+            // Send more info to the backend
+            await axios.put(
+              `http://localhost:8000/api/chat/${messages[editingId].chatId}`,
               {
-                userMessage: newMessage.text,
-                botMessage: botMessage.text,
-                userId: user?.id,
+                userMessage: messageToSend, // Use messageToSend here
+                botMessage: response.data.response,
+                conversationId,
               },
               { withCredentials: true }
-            )
-            .catch((error) => {
-              console.error("Error saving chat", error);
-            });
-        }, 1000);
-      } catch (error) {
-        console.error("Error sending message to the chatbot", error);
+            );
+          } catch (error) {
+            console.error("Error updating edit on server:", error);
+          }
+        } else {
+          // Save to database (for new messages)
+          await axios.post(
+            "http://localhost:8000/api/chat",
+            {
+              userMessage: messageToSend, // Use messageToSend here
+              botMessage: response.data.response,
+              userId: user?.id,
+              conversationId,
+            },
+            { withCredentials: true }
+          );
+        }
+
+        // Update state with bot response
+        setMessages((prev) => {
+          const updated = [...prev];
+          // Add bot response
+          updated.push({
+            text: response.data.response,
+            sender: "bot",
+            chatId: editingId !== null ? messages[editingId].chatId : null,
+            conversationId,
+          });
+          return updated;
+        });
+
         setIsTyping(false);
+        setEditingId(null); // Reset editing state
+        setEditText(""); // Reset edit text
+      } catch (error) {
+        console.error("Error sending message", error);
+        setIsTyping(false);
+        // Revert if error occurs
+        if (editingId !== null) {
+          setMessages(messages);
+        } else {
+          setMessages((prev) => prev.filter((msg) => !msg.isLocal));
+        }
       }
     }
   };
@@ -319,12 +389,75 @@ const Chat = () => {
     },
   };
 
+  // Function to handle message deletion
+  const handleDelete = async (index) => {
+    const message = messages[index];
+
+    // For local unsaved messages, just remove from state
+    if (message.isLocal) {
+      setMessages((prev) => prev.filter((_, i) => i !== index));
+      return;
+    }
+
+    if (message.sender !== "user" || !message.chatId) {
+      console.error("Cannot delete this message");
+      return;
+    }
+
+    try {
+      await axios.delete(`http://localhost:8000/api/chat/${message.chatId}`, {
+        withCredentials: true,
+      });
+
+      // Delete both user message and corresponding bot message
+      setMessages((prev) => {
+        const newMessages = [...prev];
+        // Find the bot response (next message with same chatId)
+        const botResponseIndex = newMessages.findIndex(
+          (m, i) => i > index && m.chatId === message.chatId
+        );
+
+        if (botResponseIndex !== -1) {
+          newMessages.splice(botResponseIndex, 1);
+        }
+        newMessages.splice(index, 1);
+        return newMessages;
+      });
+    } catch (error) {
+      console.error("Delete failed:", error.response?.data || error.message);
+      alert("Failed to delete message. Please try again.");
+    }
+  };
+
+  // Function to start editing a message
+  const startEditing = (index) => {
+    if (messages[index].sender !== "user") return;
+    setEditingId(index);
+    setEditText(messages[index].text);
+    setInput(messages[index].text); // Set input field to the current message text
+  };
+
+  // Function to save edited message
+  const saveEdit = async () => {
+    if (editingId === null) return;
+
+    if (!editText.trim()) {
+      setEditingId(null);
+      return;
+    }
+
+    // Update the input field with the edited text
+    setInput(editText);
+
+    // Call sendMessage which will handle the edited message flow
+    sendMessage();
+  };
+
   return (
     <div className="flex flex-col h-screen bg-gradient-to-b from-gray-900 to-gray-800 text-white overflow-hidden">
       {/* Background Elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute opacity-5 top-0 left-0 w-full h-full">
-          {/* Abstract code patterns */}
           <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
             <defs>
               <pattern
@@ -345,7 +478,6 @@ const Chat = () => {
           </svg>
         </div>
 
-        {/* Floating algorithm symbols */}
         {[...Array(12)].map((_, index) => (
           <motion.div
             key={index}
@@ -457,7 +589,6 @@ const Chat = () => {
         className="flex-1 flex flex-col items-center relative overflow-y-auto p-4 pb-24"
       >
         {messages.length === 0 ? (
-          // Welcome screen - only shown when no messages
           <motion.div
             className="text-center mb-8 max-w-2xl"
             initial="hidden"
@@ -479,9 +610,7 @@ const Chat = () => {
               <div className="relative">
                 <motion.div
                   className="absolute -inset-4 bg-teal-500 rounded-full opacity-20 blur-xl"
-                  animate={{
-                    scale: [1, 1.05, 1],
-                  }}
+                  animate={{ scale: [1, 1.05, 1] }}
                   transition={{
                     duration: 3,
                     repeat: Infinity,
@@ -495,14 +624,12 @@ const Chat = () => {
                 />
               </div>
             </motion.div>
-
             <motion.p
               className="text-gray-300 text-xl mb-6"
               variants={fadeInUp}
             >
               I'm here to help you master Data Structures & Algorithms!
             </motion.p>
-
             <motion.div variants={fadeInUp}>
               <ReactTyped
                 strings={[
@@ -518,7 +645,6 @@ const Chat = () => {
                 className="text-teal-300 text-lg block mb-8"
               />
             </motion.div>
-
             <motion.div
               className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-xl mx-auto"
               variants={fadeInUp}
@@ -543,7 +669,6 @@ const Chat = () => {
             </motion.div>
           </motion.div>
         ) : (
-          // Messages container - shown once messages exist
           <motion.div
             className="w-full max-w-4xl"
             initial="hidden"
@@ -554,7 +679,7 @@ const Chat = () => {
               {messages.map((message, index) => (
                 <motion.div
                   key={index}
-                  className={`my-4 flex ${
+                  className={`my-4 flex group ${
                     message.sender === "user" ? "justify-end" : "justify-start"
                   }`}
                   initial={{ opacity: 0, y: 20 }}
@@ -576,20 +701,70 @@ const Chat = () => {
                     </motion.div>
                   )}
                   <motion.div
-                    className={`p-4 max-w-lg rounded-2xl shadow-lg ${
+                    className={`p-4 max-w-lg rounded-2xl shadow-lg relative ${
                       message.sender === "user"
                         ? "bg-gradient-to-r from-teal-600 to-teal-500 text-white rounded-tr-none"
                         : "bg-gray-800 border border-gray-700 text-white rounded-tl-none"
                     }`}
                     whileHover={{ scale: 1.01 }}
-                    style={{
-                      wordWrap: "break-word",
-                    }}
+                    style={{ wordWrap: "break-word" }}
                   >
-                    {message.sender === "user" ? (
-                      message.text
+                    {editingId === index ? (
+                      <div className="flex flex-col">
+                        <input
+                          type="text"
+                          value={editText}
+                          onChange={(e) => setEditText(e.target.value)}
+                          className="bg-gray-700 text-white p-2 rounded mb-2"
+                          autoFocus
+                        />
+                        <div className="flex justify-end space-x-2">
+                          <motion.button
+                            onClick={saveEdit}
+                            className="px-3 py-1 bg-teal-500 rounded-md"
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                          >
+                            Save & Resend
+                          </motion.button>
+                          <motion.button
+                            onClick={() => setEditingId(null)}
+                            className="px-3 py-1 bg-gray-600 rounded-md"
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                          >
+                            Cancel
+                          </motion.button>
+                        </div>
+                      </div>
                     ) : (
-                      <MessageContent content={message.text} />
+                      <>
+                        {message.sender === "user" ? (
+                          message.text
+                        ) : (
+                          <MessageContent content={message.text} />
+                        )}
+                        {message.sender === "user" && (
+                          <div className="absolute -top-2 -right-2 flex space-x-1 opacity-100 group-hover:opacity-100 transition-opacity">
+                            <motion.button
+                              onClick={() => startEditing(index)}
+                              className="p-1 bg-blue-500 rounded-full"
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                            >
+                              <FiEdit2 size={14} />
+                            </motion.button>
+                            <motion.button
+                              onClick={() => handleDelete(index)}
+                              className="p-1 bg-red-500 rounded-full"
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                            >
+                              <FiTrash2 size={14} />
+                            </motion.button>
+                          </div>
+                        )}
+                      </>
                     )}
                   </motion.div>
                   {message.sender === "user" && (
@@ -617,66 +792,48 @@ const Chat = () => {
               ))}
             </AnimatePresence>
 
-            {/* Typing indicator */}
-            <AnimatePresence>
-              {isTyping && (
-                <motion.div
-                  className="flex justify-start my-4"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 20 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <motion.div className="h-8 w-8 rounded-full bg-teal-500 flex items-center justify-center mr-2 mt-1">
-                    <img
-                      src="page-photos/robot-2.png"
-                      alt="Bot"
-                      className="h-6 w-6"
-                    />
-                  </motion.div>
-                  <motion.div className="p-4 rounded-2xl bg-gray-800 border border-gray-700 text-white rounded-tl-none">
-                    <motion.div
-                      className="flex space-x-1"
-                      animate={{ y: [0, -5, 0] }}
-                      transition={{
-                        repeat: Infinity,
-                        duration: 1.5,
-                        times: [0, 0.5, 1],
-                        staggerChildren: 0.2,
-                      }}
-                    >
+            {isTyping && (
+              <motion.div
+                className="flex justify-start my-4"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <motion.div className="h-8 w-8 rounded-full bg-teal-500 flex items-center justify-center mr-2 mt-1">
+                  <img
+                    src="page-photos/robot-2.png"
+                    alt="Bot"
+                    className="h-6 w-6"
+                  />
+                </motion.div>
+                <motion.div className="p-4 rounded-2xl bg-gray-800 border border-gray-700 text-white rounded-tl-none">
+                  <motion.div
+                    className="flex space-x-1"
+                    animate={{ y: [0, -5, 0] }}
+                    transition={{
+                      repeat: Infinity,
+                      duration: 1.5,
+                      times: [0, 0.5, 1],
+                      staggerChildren: 0.2,
+                    }}
+                  >
+                    {[0, 1, 2].map((i) => (
                       <motion.div
+                        key={i}
                         className="w-2 h-2 bg-teal-400 rounded-full"
                         animate={{ y: [0, -5, 0] }}
                         transition={{
                           duration: 0.5,
                           repeat: Infinity,
-                          delay: 0,
+                          delay: i * 0.2,
                         }}
                       />
-                      <motion.div
-                        className="w-2 h-2 bg-teal-400 rounded-full"
-                        animate={{ y: [0, -5, 0] }}
-                        transition={{
-                          duration: 0.5,
-                          repeat: Infinity,
-                          delay: 0.2,
-                        }}
-                      />
-                      <motion.div
-                        className="w-2 h-2 bg-teal-400 rounded-full"
-                        animate={{ y: [0, -5, 0] }}
-                        transition={{
-                          duration: 0.5,
-                          repeat: Infinity,
-                          delay: 0.4,
-                        }}
-                      />
-                    </motion.div>
+                    ))}
                   </motion.div>
                 </motion.div>
-              )}
-            </AnimatePresence>
+              </motion.div>
+            )}
             <div ref={messagesEndRef} />
           </motion.div>
         )}
@@ -691,7 +848,6 @@ const Chat = () => {
       >
         <div className="flex justify-center">
           <div className="w-full max-w-4xl relative">
-            {/* Input area */}
             <div className="relative">
               <motion.input
                 ref={inputRef}
@@ -727,8 +883,6 @@ const Chat = () => {
             </div>
           </div>
         </div>
-
-        {/* Footer text */}
         <motion.div
           className="text-center text-gray-500 text-xs mt-4"
           initial={{ opacity: 0 }}
