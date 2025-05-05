@@ -276,7 +276,7 @@ const Chat = () => {
 
       try {
         // You might want to unify these or use an environment variable
-        const response = await api.post("http://34.56.215.239:8000/chat", {
+        const response = await api.post("https://34.56.215.239:8000/chat", {
           message: messageToSend,
           conversationId,
         });
