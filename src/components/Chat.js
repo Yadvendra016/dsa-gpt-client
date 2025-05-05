@@ -9,7 +9,7 @@ import { ReactTyped } from "react-typed";
 import axios from "axios";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
-
+import api, { getUser, logout } from "../utils/auth";
 // Helper function to parse message content
 const MessageContent = ({ content }) => {
   const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
@@ -178,20 +178,22 @@ const Chat = () => {
   }, [transcript]);
 
   useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const response = await axios.get(
-          "https://code-gpt-server.onrender.com/api/me",
-          {
-            withCredentials: true,
-          }
-        );
-        setUser(response.data);
-      } catch (error) {
-        console.error("Error fetching user data", error);
-      }
-    };
-    fetchUser();
+    // Use the stored user from localStorage instead of making a separate API call
+    const userData = getUser();
+    if (userData) {
+      setUser(userData);
+    } else {
+      // Fallback to API call if needed
+      const fetchUser = async () => {
+        try {
+          const response = await api.get("/api/me");
+          setUser(response.data);
+        } catch (error) {
+          console.error("Error fetching user data", error);
+        }
+      };
+      fetchUser();
+    }
   }, []);
 
   // to fetch chat history when user data is available
@@ -199,12 +201,7 @@ const Chat = () => {
     const fetchChatHistory = async () => {
       if (user?.id) {
         try {
-          const response = await axios.get(
-            "https://code-gpt-server.onrender.com/api/chats",
-            {
-              withCredentials: true,
-            }
-          );
+          const response = await api.get("/api/chats");
 
           // Transform the database chats to alternating user-bot messages
           const chatHistory = response.data.flatMap((chat) => [
@@ -278,39 +275,31 @@ const Chat = () => {
       setIsTyping(true);
 
       try {
-        const response = await axios.post("http://34.56.215.239:8000/chat", {
-          message: messageToSend, // Use messageToSend here instead of input
-          conversationId, // Send conversationId to maintain context
+        // You might want to unify these or use an environment variable
+        const response = await api.post("http://34.56.215.239:8000/chat", {
+          message: messageToSend,
+          conversationId,
         });
 
         // If we were editing, also update the database
         if (editingId !== null) {
           try {
-            // Send more info to the backend
-            await axios.put(
-              `https://code-gpt-server.onrender.com/api/chat/${messages[editingId].chatId}`,
-              {
-                userMessage: messageToSend, // Use messageToSend here
-                botMessage: response.data.response,
-                conversationId,
-              },
-              { withCredentials: true }
-            );
+            await api.put(`/api/chat/${messages[editingId].chatId}`, {
+              userMessage: messageToSend,
+              botMessage: response.data.response,
+              conversationId,
+            });
           } catch (error) {
             console.error("Error updating edit on server:", error);
           }
         } else {
           // Save to database (for new messages)
-          await axios.post(
-            "https://code-gpt-server.onrender.com/api/chat",
-            {
-              userMessage: messageToSend, // Use messageToSend here
-              botMessage: response.data.response,
-              userId: user?.id,
-              conversationId,
-            },
-            { withCredentials: true }
-          );
+          await api.post("/api/chat", {
+            userMessage: messageToSend,
+            botMessage: response.data.response,
+            userId: user?.id,
+            conversationId,
+          });
         }
 
         // Update state with bot response
@@ -363,7 +352,7 @@ const Chat = () => {
   const handleLogout = async () => {
     try {
       await axios.post(
-        "https://code-gpt-server.onrender.com/api/logout",
+        "http://localhost:8000/api/logout",
         {},
         { withCredentials: true }
       );
@@ -411,12 +400,7 @@ const Chat = () => {
     }
 
     try {
-      await axios.delete(
-        `https://code-gpt-server.onrender.com/api/chat/${message.chatId}`,
-        {
-          withCredentials: true,
-        }
-      );
+      await api.delete(`/api/chat/${message.chatId}`);
 
       // Delete both user message and corresponding bot message
       setMessages((prev) => {

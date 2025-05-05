@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ReactTyped } from "react-typed";
 import axios from "axios";
+import api, { getUser, logout } from "../utils/auth";
 
 const Home = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -20,22 +21,16 @@ const Home = () => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const response = await axios.get(
-          "https://code-gpt-server.onrender.com/api/me",
-          {
-            withCredentials: true,
-            headers: {
-              "Content-Type": "application/json",
-              Accept: "application/json",
-            },
-          }
-        );
-        if (response.data) {
+        const userData = getUser();
+        if (userData) {
+          // Verify the token is still valid
+          await api.get("/api/me");
           setIsLoggedIn(true);
-          setUser(response.data);
+          setUser(userData);
         }
       } catch (error) {
-        // If error occurs, user is not logged in
+        // If error occurs, user is not logged in or token expired
+        logout();
         setIsLoggedIn(false);
         setUser(null);
       }
@@ -47,22 +42,15 @@ const Home = () => {
   // Handle logout
   const handleLogout = async () => {
     try {
-      await axios.post(
-        "https://code-gpt-server.onrender.com/api/logout",
-        {},
-        {
-          withCredentials: true,
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-        }
-      );
+      await api.post("/api/logout");
+    } catch (error) {
+      console.error("Logout API error:", error);
+    } finally {
+      // Always clear local storage regardless of API success/failure
+      logout();
       setIsLoggedIn(false);
       setUser(null);
-      navigate("/"); // Redirect to home after logout
-    } catch (error) {
-      console.error("Logout failed", error);
+      navigate("/");
     }
   };
 

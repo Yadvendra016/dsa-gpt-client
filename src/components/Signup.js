@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import axios from "axios";
 import { motion } from "framer-motion";
+import api, { setAuthToken, setUser } from "../utils/auth";
 
 const Signup = () => {
   const [name, setName] = useState("");
@@ -23,19 +24,23 @@ const Signup = () => {
     setIsLoading(true);
 
     try {
-      await axios.post(
-        "https://code-gpt-server.onrender.com/api/register",
-        {
-          name,
-          gender,
-          email,
-          password,
-        },
-        { withCredentials: true }
-      );
+      const response = await api.post("/api/register", {
+        name,
+        gender,
+        email,
+        password,
+      });
+
+      // Save token and user to localStorage
+      setAuthToken(response.data.token);
+      setUser(response.data.user);
+
       navigate("/chat");
     } catch (error) {
-      setError("Error creating account. Please try again.");
+      setError(
+        error.response?.data?.message ||
+          "Error creating account. Please try again."
+      );
     } finally {
       setIsLoading(false);
     }

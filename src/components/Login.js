@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import axios from "axios";
 import { motion } from "framer-motion";
+import api, { setAuthToken, setUser } from "../utils/auth";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -25,11 +26,12 @@ const Login = () => {
     }
 
     try {
-      await axios.post(
-        "https://code-gpt-server.onrender.com/api/login",
-        { email, password },
-        { withCredentials: true }
-      );
+      const response = await api.post("/api/login", { email, password });
+
+      // Save token and user to localStorage
+      setAuthToken(response.data.token);
+      setUser(response.data.user);
+
       navigate("/chat");
     } catch (error) {
       setError("Invalid credentials. Please try again.");
