@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_URL = "http://localhost:8000";
+const API_URL = "https://code-gpt-server.onrender.com";
 
 // API client with Authorization header interceptor
 const api = axios.create({
