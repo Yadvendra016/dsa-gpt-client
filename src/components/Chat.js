@@ -9,7 +9,7 @@ import { ReactTyped } from "react-typed";
 import axios from "axios";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
-import api, { getUser, logout } from "../utils/auth";
+import api, { getUser } from "../utils/auth";
 // Helper function to parse message content
 const MessageContent = ({ content }) => {
   const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
@@ -349,19 +349,6 @@ const Chat = () => {
     return <div>Your browser does not support speech recognition.</div>;
   }
 
-  const handleLogout = async () => {
-    try {
-      await axios.post(
-        "http://localhost:8000/api/logout",
-        {},
-        { withCredentials: true }
-      );
-      window.location.href = "/";
-    } catch (error) {
-      console.error("Error logging out", error);
-    }
-  };
-
   const handleSuggestionClick = (suggestion) => {
     setInput(suggestion);
     setShowSuggestions(false);
@@ -553,26 +540,7 @@ const Chat = () => {
             </svg>
             Home
           </motion.button>
-          <motion.button
-            className="bg-gradient-to-r from-teal-500 to-teal-400 hover:from-teal-600 hover:to-teal-500 text-white px-4 py-2 rounded-md shadow-md flex items-center"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={handleLogout}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5 mr-1"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-            >
-              <path
-                fillRule="evenodd"
-                d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h12a1 1 0 001-1V4a1 1 0 00-1-1H3zm11 4a1 1 0 10-2 0v4.586l-1.293-1.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L14 11.586V7z"
-                clipRule="evenodd"
-              />
-            </svg>
-            Logout
-          </motion.button>
+         
         </div>
       </motion.header>
 
