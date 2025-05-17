@@ -1,0 +1,25 @@
+<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <!-- Robot head -->
+  <rect x="12" y="10" width="40" height="36" rx="6" fill="#3366cc" />
+  
+  <!-- Robot eyes -->
+  <circle cx="24" cy="26" r="6" fill="#ffffff" />
+  <circle cx="40" cy="26" r="6" fill="#ffffff" />
+  <circle cx="24" cy="26" r="3" fill="#000000" />
+  <circle cx="40" cy="26" r="3" fill="#000000" />
+  
+  <!-- Antenna -->
+  <rect x="30" y="4" width="4" height="6" fill="#666666" />
+  <circle cx="32" cy="2" r="2" fill="#ff3333" />
+  
+  <!-- Data structure symbol (binary tree) -->
+  <circle cx="32" cy="38" r="3" fill="#ffffff" />
+  <circle cx="26" cy="44" r="2.5" fill="#ffffff" />
+  <circle cx="38" cy="44" r="2.5" fill="#ffffff" />
+  <line x1="32" y1="38" x2="26" y2="44" stroke="#ffffff" stroke-width="1.5" />
+  <line x1="32" y1="38" x2="38" y2="44" stroke="#ffffff" stroke-width="1.5" />
+  
+  <!-- Robot ears/sides -->
+  <rect x="8" y="20" width="4" height="16" rx="2" fill="#1a4ba8" />
+  <rect x="52" y="20" width="4" height="16" rx="2" fill="#1a4ba8" />
+</svg>
