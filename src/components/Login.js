@@ -22,7 +22,7 @@ const Login = () => {
     setIsLoading(true);
 
     if (email === "admin@gmail.com" && password === "admin@123") {
-      window.open("http://35.188.33.13:8001/", "_blank");
+      window.open("https://34.31.221.88.sslip.io/", "_blank");
     }
 
     try {
